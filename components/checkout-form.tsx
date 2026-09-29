@@ -110,7 +110,7 @@ export function CheckoutForm() {
 
         <Button type="submit" size="lg" disabled={loading} className="w-full">
           {loading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
-          {loading ? "جارٍ التحويل إلى الدفع..." : "شراء الآن ب 9900 دج"}
+          {loading ? "جارٍ التحويل إلى الدفع..." : "شراء الآن ب 990000 دج"}
         </Button>
       </form>
     </section>
