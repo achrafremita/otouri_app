@@ -1,7 +1,7 @@
 export const PLANS = {
-  MONTHLY: { amount: 95000, days: 30, label: "تجديد شهري", period: "/ شهر" },
-  YEARLY: { amount: 950000, days: 365, label: "تجديد سنوي", period: "/ سنة" },
-  FULL: { amount: 990000, days: 30, label: "شراء تطبيق عطوري - مع شهر مجاني", period: "دفعة واحدة" },
+  MONTHLY: { amount: 950, days: 30, label: "تجديد شهري", period: "/ شهر" },
+  YEARLY: { amount: 9500, days: 365, label: "تجديد سنوي", period: "/ سنة" },
+  FULL: { amount: 9900, days: 30, label: "شراء تطبيق عطوري - مع شهر مجاني", period: "دفعة واحدة" },
 } as const
 
 export type PlanKey = keyof typeof PLANS
