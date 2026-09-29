@@ -10,5 +10,5 @@ export const NEW_CUSTOMER_PLANS: PlanKey[] = ["FULL"]
 export const RENEWAL_PLANS: PlanKey[] = ["MONTHLY", "YEARLY"]
 
 export function formatDzd(cents: number) {
-  return `${new Intl.NumberFormat("fr-DZ").format(cents / 100)} DZD`
+  return `${new Intl.NumberFormat("fr-DZ").format(cents)} DZD`
 }

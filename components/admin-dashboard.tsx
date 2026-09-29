@@ -168,7 +168,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                   <TableCell>{row.plan}</TableCell>
                   <TableCell>{row.expiry}</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {row.amount ? `${(row.amount / 100).toLocaleString()} DZD` : "—"}
+                    {row.amount ? `${(row.amount).toLocaleString()} DZD` : "—"}
                   </TableCell>
                   <TableCell>
                     {row.revoked ? <Badge variant="destructive">Revoked</Badge> : <Badge>Active</Badge>}
