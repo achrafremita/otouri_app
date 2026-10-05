@@ -24,9 +24,21 @@ export const POST = withErrors(async (request) => {
   const secretKey = process.env.CHARGILY_SECRET_KEY
   if (!secretKey) return json({ error: "CHARGILY_SECRET_KEY is not configured" }, 500)
 
-  const { phone: rawPhone, plan = "FULL", success_url, failure_url, locale = "ar" } = await getParams(request)
+  const {
+    phone: rawPhone,
+    plan = "FULL",
+    success_url,
+    failure_url,
+    locale = "ar",
+    machine_id,
+    mid,
+    name,
+    customer_name,
+  } = await getParams(request)
   const planKey = parsePlan(plan)
   const phone = normalizePhone(rawPhone)
+  const machineId = (machine_id || mid || "").toString().trim()
+  const customerName = (name || customer_name || "").toString().trim()
 
   if (!phone) return json({ error: "رقم الهاتف غير صالح. مثال: 0555123456" }, 400)
   if (!planKey) return json({ error: "Invalid plan. Use FULL, MONTHLY or YEARLY" }, 400)
@@ -46,7 +58,14 @@ export const POST = withErrors(async (request) => {
     success_url,
     locale: ["ar", "en", "fr"].includes(locale) ? locale : "ar",
     description: `License ${planKey}`,
-    metadata: { phone, plan: planKey },
+    metadata: {
+      phone,
+      plan: planKey,
+      machine_id: machineId || undefined,
+      mid: machineId || undefined,
+      name: customerName || undefined,
+      customer_name: customerName || undefined,
+    },
   }
   if (isHttpUrl(failure_url)) payload.failure_url = failure_url
 

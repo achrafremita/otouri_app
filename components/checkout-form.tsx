@@ -16,7 +16,13 @@ const INCLUDED = [
   "التفعيل برقم هاتفك مباشرة من التطبيق",
 ]
 
-export function CheckoutForm() {
+export function
+
+
+
+
+
+  CheckoutForm() {
   const [phone, setPhone] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
