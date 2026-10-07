@@ -3,12 +3,15 @@ import { timingSafeEqual } from "node:crypto"
 import { PLANS, normalizePlanType, type PlanType } from "@/lib/plans"
 import { generateOtr1License } from "@/lib/license"
 
-// Chargily Test Mode API Base URL as specified
-export const CHARGILY_TEST_API = "https://pay.chargily.dz/test/api/v2"
+// Chargily API Base URLs (pay.chargily.net)
+export const CHARGILY_TEST_API = "https://pay.chargily.net/test/api/v2"
 export const CHARGILY_LIVE_API = "https://pay.chargily.net/api/v2"
 
 export function getChargilyApiUrl(): string {
-  const secretKey = process.env.CHARGILY_SECRET_KEY || ""
+  if (process.env.CHARGILY_API_URL) {
+    return process.env.CHARGILY_API_URL.replace(/\/+$/, "")
+  }
+  const secretKey = (process.env.CHARGILY_SECRET_KEY || "").trim()
   if (secretKey.startsWith("test_") || process.env.CHARGILY_MODE === "test" || !process.env.CHARGILY_MODE) {
     return CHARGILY_TEST_API
   }
@@ -197,15 +200,18 @@ export async function fulfillPaidCheckout({
   const { error } = await supabase.from("licenses").insert(payload)
   if (error && error.code !== "23505") {
     console.error("[fulfillPaidCheckout] Insert error:", error)
-    // Fallback if some column differs
-    await supabase.from("licenses").insert({
-      phone,
-      plan: PLANS[planType].key,
-      license: licenseKey,
-      amount,
-      checkout_id: checkoutId,
-      created_at: new Date().toISOString(),
-    }).catch(() => {})
+    try {
+      await supabase.from("licenses").insert({
+        phone,
+        plan: PLANS[planType].key,
+        license: licenseKey,
+        amount,
+        checkout_id: checkoutId,
+        created_at: new Date().toISOString(),
+      })
+    } catch {
+      // ignore
+    }
   }
 
   return { ok: true, license: licenseKey, expiry }

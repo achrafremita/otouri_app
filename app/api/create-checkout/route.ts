@@ -1,7 +1,8 @@
 import { PLANS, normalizePlanType } from "@/lib/plans"
 import {
-  CHARGILY_TEST_API,
+  getChargilyApiUrl,
   getParams,
+  getSupabase,
   json,
   normalizeEmail,
   normalizePhone,
@@ -10,7 +11,7 @@ import {
 } from "@/lib/server"
 
 export const POST = withErrors(async (request) => {
-  const secretKey = process.env.CHARGILY_SECRET_KEY
+  const secretKey = (process.env.CHARGILY_SECRET_KEY || "").trim()
   if (!secretKey) {
     return json({ error: "CHARGILY_SECRET_KEY is not configured on server" }, 500)
   }
@@ -66,8 +67,8 @@ export const POST = withErrors(async (request) => {
     },
   }
 
-  // Use Chargily Test API endpoint: https://pay.chargily.dz/test/api/v2/checkouts
-  const chargilyEndpoint = `${CHARGILY_TEST_API}/checkouts`
+  const chargilyBase = getChargilyApiUrl()
+  const chargilyEndpoint = `${chargilyBase}/checkouts`
 
   const response = await fetch(chargilyEndpoint, {
     method: "POST",
@@ -82,7 +83,7 @@ export const POST = withErrors(async (request) => {
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok || !data.checkout_url) {
-    console.error("[create-checkout] Chargily API error:", data)
+    console.error("[create-checkout] Chargily API error:", response.status, data)
     return json(
       {
         error: data.message || "تعذر إنشاء جلسة الدفع مع Chargily Pay",
@@ -90,6 +91,26 @@ export const POST = withErrors(async (request) => {
       },
       response.status || 500
     )
+  }
+
+  // Record pending checkout session in Supabase
+  try {
+    const supabase = getSupabase()
+    await supabase.from("licenses").insert({
+      phone,
+      email,
+      purchase_type: planType,
+      plan: planConfig.key,
+      activation_type: "تلقائي",
+      status: "pending",
+      amount,
+      paid: false,
+      checkout_id: data.id ? String(data.id) : undefined,
+      customer_name: email || phone,
+      created_at: new Date().toISOString(),
+    })
+  } catch (dbErr) {
+    console.warn("[create-checkout] Supabase record pending warning:", dbErr)
   }
 
   return json({

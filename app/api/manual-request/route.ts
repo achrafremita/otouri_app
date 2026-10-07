@@ -15,7 +15,10 @@ export const POST = withErrors(async (request) => {
     email: rawEmail,
     type: rawType = "first",
     plan: rawPlan,
+    amount: rawAmount,
     note,
+    name,
+    customer_name,
   } = await getParams(request)
 
   const phone = normalizePhone(rawPhone)
@@ -30,10 +33,10 @@ export const POST = withErrors(async (request) => {
   }
 
   const planConfig = PLANS[planType]
-  const amount = planConfig.amount
+  const amount = Number(rawAmount) || planConfig.amount
   const supabase = getSupabase()
 
-  // Insert manual activation request as pending
+  // Insert manual activation request as pending in Supabase
   const payload: Record<string, any> = {
     phone,
     email,
@@ -42,7 +45,7 @@ export const POST = withErrors(async (request) => {
     activation_type: "يدوي",
     status: "pending",
     amount,
-    customer_name: email || phone,
+    customer_name: customer_name || name || email || phone || "طلب تفعيل يدوي",
     paid: false,
     created_at: new Date().toISOString(),
   }
@@ -52,18 +55,26 @@ export const POST = withErrors(async (request) => {
   if (error) {
     console.error("[manual-request] Insert error:", error)
     // Fallback if some schema column fails
-    await supabase.from("licenses").insert({
+    const fallbackRes = await supabase.from("licenses").insert({
       phone,
       plan: planConfig.key,
       amount,
+      status: "pending",
+      activation_type: "يدوي",
       created_at: new Date().toISOString(),
-    }).catch(() => {})
+    }).select().maybeSingle()
+
+    return json({
+      success: true,
+      message: "تم إرسال طلبك، سيتم تفعيلك في أقرب وقت",
+      data: fallbackRes.data || payload,
+    })
   }
 
   return json({
     success: true,
     message: "تم إرسال طلبك، سيتم تفعيلك في أقرب وقت",
-    data: data || { phone, email, planType, status: "pending" },
+    data: data || payload,
   })
 })
 

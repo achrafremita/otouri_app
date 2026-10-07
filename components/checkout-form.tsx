@@ -33,7 +33,7 @@ type UserStatus = "new" | "expired" | "active" | "checking"
 export function CheckoutForm() {
   const [phone, setPhone] = useState("")
   const [email, setEmail] = useState("")
-  const [activationType, setActivationType] = useState<"تلقائي" | "يدوي">("تلقائي")
+  const [activationType, setActivationType] = useState<"automatic" | "manual" | "تلقائي" | "يدوي">("automatic")
   const [selectedPlan, setSelectedPlan] = useState<PlanType>("first")
   const [userStatus, setUserStatus] = useState<UserStatus>("new")
   const [statusDetails, setStatusDetails] = useState<{ expiry?: string; license?: string } | null>(null)
@@ -41,6 +41,7 @@ export function CheckoutForm() {
   const [loading, setLoading] = useState(false)
   const [checkingUser, setCheckingUser] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [chargilyError, setChargilyError] = useState<string | null>(null)
   const [manualSuccessMsg, setManualSuccessMsg] = useState<string | null>(null)
 
   // Chargily Iframe Modal state
@@ -175,10 +176,19 @@ export function CheckoutForm() {
     }
   }, [iframeModalOpen, currentCheckoutId, paymentCompleted, phone, email])
 
+  function handleActivationTypeChange(type: "automatic" | "manual" | "تلقائي" | "يدوي") {
+    setActivationType(type)
+    if (type === "manual" || type === "يدوي") {
+      setChargilyError(null)
+      setError(null)
+    }
+  }
+
   // Submit Handler
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
+    setChargilyError(null)
     setManualSuccessMsg(null)
 
     const cleanPhone = phone.replace(/[\s\-().]/g, "")
@@ -198,8 +208,36 @@ export function CheckoutForm() {
 
     setLoading(true)
 
-    if (activationType === "تلقائي") {
-      // Automated checkout with Chargily test mode
+    const isManual = activationType === "manual" || activationType === "يدوي"
+
+    if (isManual) {
+      // Manual activation request ONLY — DO NOT call /api/create-checkout
+      try {
+        const res = await fetch("/api/manual-request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone: cleanPhone,
+            email: email.trim(),
+            type: planToUse,
+            amount: planConfig.amount,
+            activation_type: "manual",
+          }),
+        })
+
+        const data = await res.json()
+        if (!res.ok) {
+          throw new Error(data.error || "تعذّر إرسال طلب التفعيل اليدوي")
+        }
+
+        setManualSuccessMsg("تم إرسال طلبك، سيتم تفعيلك في أقرب وقت")
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "حدث خطأ أثناء إرسال طلب التفعيل")
+      } finally {
+        setLoading(false)
+      }
+    } else {
+      // Automated checkout with Chargily Pay
       try {
         const origin = window.location.origin
         const res = await fetch("/api/create-checkout", {
@@ -217,7 +255,9 @@ export function CheckoutForm() {
 
         const data = await res.json()
         if (!res.ok || !data.checkout_url) {
-          throw new Error(data.error || "تعذّر إنشاء رابط الدفع مع Chargily Pay")
+          const errorMsg = data.error || "تعذّر إنشاء رابط الدفع مع Chargily Pay"
+          setChargilyError(errorMsg)
+          throw new Error(errorMsg)
         }
 
         // Open checkout INSIDE iframe modal (NOT external redirect)
@@ -226,32 +266,9 @@ export function CheckoutForm() {
         setPaymentCompleted(false)
         setIframeModalOpen(true)
       } catch (err) {
-        setError(err instanceof Error ? err.message : "حدث خطأ غير متوقع أثناء الاتصال ببوابة الدفع")
-      } finally {
-        setLoading(false)
-      }
-    } else {
-      // Manual activation request
-      try {
-        const res = await fetch("/api/manual-request", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            phone: cleanPhone,
-            email: email.trim(),
-            type: planToUse,
-            amount: planConfig.amount,
-          }),
-        })
-
-        const data = await res.json()
-        if (!res.ok) {
-          throw new Error(data.error || "تعذّر إرسال طلب التفعيل اليدوي")
-        }
-
-        setManualSuccessMsg("تم إرسال طلبك، سيتم تفعيلك في أقرب وقت")
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "حدث خطأ أثناء إرسال طلب التفعيل")
+        const msg = err instanceof Error ? err.message : "حدث خطأ غير متوقع أثناء الاتصال ببوابة الدفع"
+        setChargilyError(msg)
+        setError(msg)
       } finally {
         setLoading(false)
       }
@@ -261,7 +278,8 @@ export function CheckoutForm() {
   // Determine button text dynamically based on selection
   function getSubmitButtonText() {
     if (loading) return "جارٍ المعالجة..."
-    if (activationType === "يدوي") {
+    const isManual = activationType === "manual" || activationType === "يدوي"
+    if (isManual) {
       if (selectedPlan === "first") return "إرسال طلب شراء بـ 9900 دج"
       if (selectedPlan === "monthly") return "إرسال طلب تجديد بـ 950 دج"
       return "إرسال طلب تجديد بـ 9500 دج"
@@ -509,7 +527,7 @@ export function CheckoutForm() {
                 {/* Automatic Chargily */}
                 <label
                   className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition-all ${
-                    activationType === "تلقائي"
+                    activationType === "automatic" || activationType === "تلقائي"
                       ? "border-primary bg-primary/10"
                       : "border-border/60 hover:border-primary/40"
                   }`}
@@ -517,9 +535,9 @@ export function CheckoutForm() {
                   <input
                     type="radio"
                     name="activation_type"
-                    value="تلقائي"
-                    checked={activationType === "تلقائي"}
-                    onChange={() => setActivationType("تلقائي")}
+                    value="automatic"
+                    checked={activationType === "automatic" || activationType === "تلقائي"}
+                    onChange={() => handleActivationTypeChange("automatic")}
                     className="accent-primary size-4 mt-0.5"
                   />
                   <div className="flex flex-col gap-1">
@@ -536,7 +554,7 @@ export function CheckoutForm() {
                 {/* Manual Request */}
                 <label
                   className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition-all ${
-                    activationType === "يدوي"
+                    activationType === "manual" || activationType === "يدوي"
                       ? "border-primary bg-primary/10"
                       : "border-border/60 hover:border-primary/40"
                   }`}
@@ -544,9 +562,9 @@ export function CheckoutForm() {
                   <input
                     type="radio"
                     name="activation_type"
-                    value="يدوي"
-                    checked={activationType === "يدوي"}
-                    onChange={() => setActivationType("يدوي")}
+                    value="manual"
+                    checked={activationType === "manual" || activationType === "يدوي"}
+                    onChange={() => handleActivationTypeChange("manual")}
                     className="accent-primary size-4 mt-0.5"
                   />
                   <div className="flex flex-col gap-1">
@@ -563,10 +581,10 @@ export function CheckoutForm() {
             </div>
 
             {/* Error Message */}
-            {error && (
+            {(error || chargilyError) && (
               <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                 <AlertCircle className="size-4 shrink-0" />
-                <span>{error}</span>
+                <span>{error || chargilyError}</span>
               </div>
             )}
 
@@ -579,7 +597,7 @@ export function CheckoutForm() {
             >
               {loading ? (
                 <Loader2 className="size-5 animate-spin mr-2" />
-              ) : activationType === "تلقائي" ? (
+              ) : activationType === "automatic" || activationType === "تلقائي" ? (
                 <Zap className="size-5 ml-2" />
               ) : (
                 <Clock className="size-5 ml-2" />
@@ -688,3 +706,6 @@ export function CheckoutForm() {
     </div>
   )
 }
+
+export const ActivationView = CheckoutForm
+export default CheckoutForm

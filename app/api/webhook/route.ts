@@ -114,14 +114,18 @@ export async function POST(request: Request) {
     if (insertError && insertError.code !== "23505") {
       console.error("[webhook] Supabase insert error:", insertError)
       // Fallback with minimal columns in case table has differing structure
-      await supabase.from("licenses").insert({
-        phone: phone || null,
-        plan: PLANS[planType].key,
-        license: licenseKey,
-        amount,
-        checkout_id: checkoutId,
-        created_at: new Date().toISOString(),
-      }).catch(() => {})
+      try {
+        await supabase.from("licenses").insert({
+          phone: phone || null,
+          plan: PLANS[planType].key,
+          license: licenseKey,
+          amount,
+          checkout_id: checkoutId,
+          created_at: new Date().toISOString(),
+        })
+      } catch {
+        // ignore
+      }
     }
 
     console.log(`[webhook] Successfully activated automatic license for ${phone || email} (${planType})`)
