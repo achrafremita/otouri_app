@@ -5,9 +5,11 @@ const PLAN_INFO: Record<string, { t: string; d: number }> = {
   FULL: { t: "f", d: 30 },
   f: { t: "f", d: 30 },
   month: { t: "m", d: 30 },
+  monthly: { t: "m", d: 30 },
   MONTHLY: { t: "m", d: 30 },
   m: { t: "m", d: 30 },
   year: { t: "y", d: 365 },
+  yearly: { t: "y", d: 365 },
   YEARLY: { t: "y", d: 365 },
   y: { t: "y", d: 365 },
 }
@@ -27,22 +29,35 @@ export function formatPrivateKey(rawKey: string): string {
   return key
 }
 
+export function getSigningPrivateKey(): string | null {
+  const key =
+    process.env.LICENS_E_KEY ||
+    process.env.LICENS_C_KEY ||
+    process.env.LICENSE_PRIVATE_KEY ||
+    process.env.LICENSE_SECRET_KEY
+  return key ? key.trim() : null
+}
+
 export function generateOtr1License({
-  machineId,
+  machineId = "OTOURI-USER",
   plan,
   customerName = "",
+  customerPhone = "",
+  customerEmail = "",
   privateKey,
 }: {
-  machineId: string
+  machineId?: string
   plan: string
   customerName?: string
-  privateKey: string
+  customerPhone?: string
+  customerEmail?: string
+  privateKey?: string
 }): string {
-  const planKey = (plan || "FULL").toString()
-  const planInfo = PLAN_INFO[planKey] || PLAN_INFO[planKey.toUpperCase()] || { t: "f", d: 30 }
+  const planKey = (plan || "first").toString()
+  const planInfo = PLAN_INFO[planKey] || PLAN_INFO[planKey.toLowerCase()] || PLAN_INFO[planKey.toUpperCase()] || { t: "f", d: 30 }
 
-  const formattedMid = machineId.trim().toUpperCase()
-  const cleanName = customerName.trim()
+  const formattedMid = (machineId || customerPhone || "OTOURI-APP").trim().toUpperCase()
+  const cleanName = (customerName || customerEmail || customerPhone || "Otouri Client").trim()
   const randomId = crypto.randomBytes(6).toString("hex")
 
   const payload = {
@@ -54,16 +69,30 @@ export function generateOtr1License({
     i: randomId,
     c: cleanName,
     name: cleanName,
+    phone: customerPhone || undefined,
+    email: customerEmail || undefined,
   }
 
   const p64 = b64u(JSON.stringify(payload))
-  const priv = crypto.createPrivateKey(formatPrivateKey(privateKey))
+  const keyToUse = privateKey || getSigningPrivateKey()
 
-  const sigBuffer =
-    priv.asymmetricKeyType === "ed25519"
-      ? crypto.sign(null, Buffer.from(p64, "utf8"), priv)
-      : crypto.sign("sha256", Buffer.from(p64, "utf8"), priv)
+  if (keyToUse) {
+    try {
+      const priv = crypto.createPrivateKey(formatPrivateKey(keyToUse))
+      const sigBuffer =
+        priv.asymmetricKeyType === "ed25519"
+          ? crypto.sign(null, Buffer.from(p64, "utf8"), priv)
+          : crypto.sign("sha256", Buffer.from(p64, "utf8"), priv)
 
-  const sig = b64u(sigBuffer)
+      const sig = b64u(sigBuffer)
+      return `OTR1.${p64}.${sig}`
+    } catch (err) {
+      console.warn("[license] Failed to sign with private key, falling back to HMAC token:", err)
+    }
+  }
+
+  // Fallback signature with secret key
+  const fallbackSecret = process.env.CHARGILY_SECRET_KEY || "otouri-secret-license-key"
+  const sig = crypto.createHmac("sha256", fallbackSecret).update(p64).digest("base64url")
   return `OTR1.${p64}.${sig}`
 }

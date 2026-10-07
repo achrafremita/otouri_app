@@ -3,7 +3,7 @@ import { SiteHeader } from "@/components/site-header"
 import { AdminDashboard } from "@/components/admin-dashboard"
 
 export const metadata: Metadata = {
-  title: "Admin — License Store",
+  title: "لوحة تحكم المشرف — تطبيق عطوري",
   robots: { index: false, follow: false },
 }
 
@@ -11,8 +11,7 @@ export default function AdminPage() {
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto max-w-5xl px-4 py-12">
-        <h1 className="mb-8 text-3xl font-semibold tracking-tight">Admin</h1>
+      <main dir="rtl" className="mx-auto max-w-6xl px-4 py-8">
         <AdminDashboard />
       </main>
     </>
