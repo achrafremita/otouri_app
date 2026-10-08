@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
+import Link from "next/link"
 import { PLANS, type PlanType } from "@/lib/plans"
 
 const PHONE_PATTERN = /^(0|\+213|00213)[567]\d{8}$/
@@ -542,6 +543,17 @@ export function CheckoutForm() {
           </form>
         </CardContent>
       </Card>
+
+      {/* Footer Links - Privacy & Terms */}
+      <div className="mt-6 flex items-center justify-center gap-4 text-xs text-muted-foreground">
+        <Link href="/privacy" className="hover:text-primary hover:underline transition-colors">
+          سياسة الخصوصية
+        </Link>
+        <span className="text-border">|</span>
+        <Link href="/terms" className="hover:text-primary hover:underline transition-colors">
+          شروط الاستخدام
+        </Link>
+      </div>
     </div>
   )
 }

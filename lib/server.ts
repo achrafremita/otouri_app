@@ -156,53 +156,107 @@ export async function fulfillPaidCheckout({
   planType,
   amount,
 }: {
-  checkoutId: string
-  phone: string
-  email: string
-  planType: PlanType
-  amount: number
+  checkoutId?: string | null
+  phone?: string | null
+  email?: string | null
+  planType?: PlanType | null
+  amount?: number | null
 }) {
   const supabase = getSupabase()
 
-  // 1. Check if checkout was already fulfilled
+  // 1. Check if checkout was already recorded in database
   if (checkoutId) {
     const { data: existing } = await supabase
       .from("licenses")
-      .select("id, license, license_key, expiry")
+      .select("*")
       .eq("checkout_id", checkoutId)
       .maybeSingle()
 
-    if (existing && existing.license) {
-      return { ok: true, license: existing.license_key || existing.license }
+    if (existing && (existing.license || existing.license_key) && existing.paid) {
+      return {
+        ok: true,
+        license: existing.license_key || existing.license,
+        expiry: existing.expiry,
+        plan: existing.purchase_type || existing.plan || "first",
+        phone: existing.phone,
+        email: existing.email,
+      }
+    }
+
+    if (existing && existing.id) {
+      const finalPhone = normalizePhone(phone || existing.phone)
+      const finalEmail = normalizeEmail(email || existing.email)
+      const finalPlanType: PlanType = normalizePlanType(planType || existing.purchase_type || existing.plan || "first")
+      const finalAmount = amount || existing.amount || PLANS[finalPlanType].amount
+
+      const customerInfo = await findCustomerLicense(finalPhone, finalEmail)
+      const previousExpiry = customerInfo?.active?.expiry || null
+      const expiry = computeExpiry(finalPlanType, null, previousExpiry)
+      const licenseKey = generateOtr1License({
+        customerPhone: finalPhone || undefined,
+        customerEmail: finalEmail || undefined,
+        plan: finalPlanType,
+        machineId: finalPhone || undefined,
+      })
+
+      const { error: updateError } = await supabase
+        .from("licenses")
+        .update({
+          status: "active",
+          paid: true,
+          expiry,
+          license: licenseKey,
+          license_key: licenseKey,
+          purchase_type: finalPlanType,
+          plan: PLANS[finalPlanType].key,
+          amount: finalAmount,
+        })
+        .eq("id", existing.id)
+
+      if (!updateError) {
+        return {
+          ok: true,
+          license: licenseKey,
+          expiry,
+          plan: finalPlanType,
+          phone: finalPhone,
+          email: finalEmail,
+        }
+      }
     }
   }
 
-  // 2. Check previous customer expiry to extend if active
-  const customerInfo = await findCustomerLicense(phone, email)
+  // 2. Otherwise insert new active license record
+  const finalPhone = normalizePhone(phone)
+  const finalEmail = normalizeEmail(email)
+  const finalPlanType: PlanType = normalizePlanType(planType || "first")
+  const finalAmount = amount || PLANS[finalPlanType].amount
+
+  const customerInfo = await findCustomerLicense(finalPhone, finalEmail)
   const previousExpiry = customerInfo?.active?.expiry || null
 
-  const expiry = computeExpiry(planType, null, previousExpiry)
+  const expiry = computeExpiry(finalPlanType, null, previousExpiry)
   const licenseKey = generateOtr1License({
-    customerPhone: phone,
-    customerEmail: email,
-    plan: planType,
-    machineId: phone,
+    customerPhone: finalPhone || undefined,
+    customerEmail: finalEmail || undefined,
+    plan: finalPlanType,
+    machineId: finalPhone || undefined,
   })
 
   const payload: Record<string, any> = {
-    phone,
-    email,
-    purchase_type: planType,
-    plan: PLANS[planType].key,
+    phone: finalPhone || null,
+    email: finalEmail || null,
+    purchase_type: finalPlanType,
+    plan: PLANS[finalPlanType].key,
     activation_type: "تلقائي",
     status: "active",
-    amount,
+    amount: finalAmount,
     expiry,
     license: licenseKey,
     license_key: licenseKey,
     paid: true,
-    checkout_id: checkoutId,
-    customer_name: email || phone,
+    checkout_id: checkoutId || null,
+    customer_name: finalEmail || finalPhone || "Otouri User",
     created_at: new Date().toISOString(),
   }
 
@@ -211,11 +265,11 @@ export async function fulfillPaidCheckout({
     console.error("[fulfillPaidCheckout] Insert error:", error)
     try {
       await supabase.from("licenses").insert({
-        phone,
-        plan: PLANS[planType].key,
+        phone: finalPhone,
+        plan: PLANS[finalPlanType].key,
         license: licenseKey,
-        amount,
-        checkout_id: checkoutId,
+        amount: finalAmount,
+        checkout_id: checkoutId || null,
         created_at: new Date().toISOString(),
       })
     } catch {
@@ -223,7 +277,14 @@ export async function fulfillPaidCheckout({
     }
   }
 
-  return { ok: true, license: licenseKey, expiry }
+  return {
+    ok: true,
+    license: licenseKey,
+    expiry,
+    plan: finalPlanType,
+    phone: finalPhone,
+    email: finalEmail,
+  }
 }
 
 export function isAdmin(request: Request): boolean {

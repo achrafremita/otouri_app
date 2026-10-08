@@ -69,11 +69,14 @@ export const POST = withErrors(async (request) => {
   const success_url = customSuccessUrl || `${formattedAppUrl}/payment/success`
   const failure_url = customFailureUrl || `${formattedAppUrl}/?payment=failed`
 
+  const webhook_endpoint = `${formattedAppUrl}/api/webhooks/chargily`
+
   const payload = {
     amount,
     currency: "dzd",
     success_url,
     failure_url,
+    webhook_endpoint,
     locale: "ar",
     description: `Otouri License - ${planConfig.nameAr} (${phone})`,
     metadata: {

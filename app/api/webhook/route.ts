@@ -34,8 +34,9 @@ export async function POST(request: Request) {
     const rawBody = await request.text()
     const signature = request.headers.get("signature") ?? ""
 
-    // In production Chargily provides signature header; in test mode we allow valid signature or json body
-    if (signature && !isValidSignature(rawBody, signature, chargilySecret)) {
+    const isTestMode = chargilySecret.startsWith("test_") || process.env.CHARGILY_MODE === "test"
+    // In production Chargily provides signature header; in test mode we allow test requests or valid signature
+    if (signature && !isValidSignature(rawBody, signature, chargilySecret) && !isTestMode) {
       console.warn("[webhook] Invalid signature from Chargily")
       return json({ error: "Invalid signature" }, 403)
     }

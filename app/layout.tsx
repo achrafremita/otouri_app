@@ -6,10 +6,11 @@ import './globals.css'
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-mono' })
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://otouri-app.vercel.app'
+
 export const metadata: Metadata = {
-  title: 'License Store — Pay with Chargily',
-  description: 'Buy a monthly, yearly or lifetime software license and pay securely with CIB or Edahabia via Chargily Pay.',
-  generator: 'v0.app',
+  title: 'عطوري - التطبيق التعليمي',
+  description: 'بوابة التفعيل الرسمية لتطبيق عطوري — شراء الترخيص وتجديد الاشتراك عبر Chargily Pay بالبطاقة الذهبية أو CIB.',
   icons: {
     icon: [
       { url: '/icon-light-32x32.png', media: '(prefers-color-scheme: light)' },
@@ -17,6 +18,17 @@ export const metadata: Metadata = {
       { url: '/icon.svg', type: 'image/svg+xml' },
     ],
     apple: '/apple-icon.png',
+  },
+  openGraph: {
+    title: 'عطوري - التطبيق التعليمي',
+    description: 'بوابة التفعيل الرسمية لتطبيق عطوري — شراء وتفعيل فوري بالبطاقة الذهبية أو CIB.',
+    url: APP_URL,
+    siteName: 'عطوري - Otouri',
+    locale: 'ar_DZ',
+    type: 'website',
+  },
+  other: {
+    'google': 'notranslate',
   },
 }
 
@@ -30,7 +42,10 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${geist.variable} ${geistMono.variable} bg-background`}>
+    <html lang="ar" dir="rtl" className={`${geist.variable} ${geistMono.variable} bg-background notranslate`} translate="no">
+      <head>
+        <meta name="google" content="notranslate" />
+      </head>
       <body className="font-sans antialiased">
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
