@@ -1,21 +1,16 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import {
   Check,
   Loader2,
-  ShieldCheck,
   Zap,
   Sparkles,
   CreditCard,
   UserCheck,
-  Calendar,
   AlertCircle,
-  X,
-  ExternalLink,
   CheckCircle2,
   Clock,
-  RefreshCw,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,15 +38,6 @@ export function CheckoutForm() {
   const [error, setError] = useState<string | null>(null)
   const [chargilyError, setChargilyError] = useState<string | null>(null)
   const [manualSuccessMsg, setManualSuccessMsg] = useState<string | null>(null)
-
-  // Chargily Iframe Modal state
-  const [iframeModalOpen, setIframeModalOpen] = useState(false)
-  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null)
-  const [currentCheckoutId, setCurrentCheckoutId] = useState<string | null>(null)
-  const [paymentCompleted, setPaymentCompleted] = useState(false)
-  const [activatedLicense, setActivatedLicense] = useState<string | null>(null)
-
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // Load initial cached user info from localStorage if available
   useEffect(() => {
@@ -127,55 +113,6 @@ export function CheckoutForm() {
     return () => clearTimeout(timer)
   }, [phone, email])
 
-  // Poll for payment success when iframe modal is open
-  useEffect(() => {
-    if (!iframeModalOpen || paymentCompleted) {
-      if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
-      return
-    }
-
-    const cleanPhone = phone.replace(/[\s\-().]/g, "")
-
-    pollingIntervalRef.current = setInterval(async () => {
-      try {
-        const queryParams = new URLSearchParams()
-        if (currentCheckoutId) queryParams.set("checkout_id", currentCheckoutId)
-        if (cleanPhone) queryParams.set("phone", cleanPhone)
-        if (email.trim()) queryParams.set("email", email.trim())
-
-        const res = await fetch(`/api/license-status?${queryParams.toString()}`)
-        if (res.ok) {
-          const data = await res.json()
-          if (data.paid && data.found) {
-            setPaymentCompleted(true)
-            setActivatedLicense(data.license || "OTR1-ACTIVE")
-            setUserStatus("active")
-            if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
-
-            // Save to localStorage
-            localStorage.setItem(
-              STORAGE_KEY,
-              JSON.stringify({
-                phone: cleanPhone,
-                email: email.trim(),
-                userStatus: "active",
-                hadFirstLicense: true,
-                license: data.license,
-                expiry: data.expiry,
-              })
-            )
-          }
-        }
-      } catch (e) {
-        console.warn("[polling] error:", e)
-      }
-    }, 3000)
-
-    return () => {
-      if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
-    }
-  }, [iframeModalOpen, currentCheckoutId, paymentCompleted, phone, email])
-
   function handleActivationTypeChange(type: "automatic" | "manual" | "تلقائي" | "يدوي") {
     setActivationType(type)
     if (type === "manual" || type === "يدوي") {
@@ -237,7 +174,7 @@ export function CheckoutForm() {
         setLoading(false)
       }
     } else {
-      // Automated checkout with Chargily Pay
+      // Automated checkout with Chargily Pay -> Full page redirect (NO iframe)
       try {
         const origin = window.location.origin
         const res = await fetch("/api/create-checkout", {
@@ -248,28 +185,26 @@ export function CheckoutForm() {
             email: email.trim(),
             type: planToUse,
             amount: planConfig.amount,
-            success_url: `${origin}/success`,
+            success_url: `${origin}/payment/success`,
             failure_url: `${origin}/?payment=failed`,
           }),
         })
 
         const data = await res.json()
-        if (!res.ok || !data.checkout_url) {
+        const targetUrl = data.checkout_url || data.url
+
+        if (!res.ok || !targetUrl) {
           const errorMsg = data.error || "تعذّر إنشاء رابط الدفع مع Chargily Pay"
           setChargilyError(errorMsg)
           throw new Error(errorMsg)
         }
 
-        // Open checkout INSIDE iframe modal (NOT external redirect)
-        setCheckoutUrl(data.checkout_url)
-        setCurrentCheckoutId(data.checkout_id)
-        setPaymentCompleted(false)
-        setIframeModalOpen(true)
+        // Full page redirect to Chargily checkout page
+        window.location.href = targetUrl
       } catch (err) {
         const msg = err instanceof Error ? err.message : "حدث خطأ غير متوقع أثناء الاتصال ببوابة الدفع"
         setChargilyError(msg)
         setError(msg)
-      } finally {
         setLoading(false)
       }
     }
@@ -607,102 +542,6 @@ export function CheckoutForm() {
           </form>
         </CardContent>
       </Card>
-
-      {/* Chargily In-Flow Iframe Modal */}
-      {iframeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 md:p-6 animate-in fade-in duration-200">
-          <div className="relative flex flex-col w-full max-w-2xl h-[85vh] max-h-[780px] rounded-2xl bg-card border border-border shadow-2xl overflow-hidden">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-5 py-3.5">
-              <div className="flex items-center gap-3">
-                <div className="flex size-9 items-center justify-center rounded-lg bg-primary/20 text-primary">
-                  <CreditCard className="size-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-foreground">بوابة الدفع الآمنة - Chargily Pay</h3>
-                  <p className="text-xs text-muted-foreground">
-                    المبلغ: <span className="font-bold text-foreground">{PLANS[selectedPlan].amount} دج</span> | الهاتف: <span className="font-mono text-foreground">{phone}</span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {checkoutUrl && (
-                  <a
-                    href={checkoutUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 p-1.5 rounded-md hover:bg-muted"
-                    title="فتح في نافذة جديدة"
-                  >
-                    <ExternalLink className="size-4" />
-                  </a>
-                )}
-                <button
-                  onClick={() => setIframeModalOpen(false)}
-                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                >
-                  <X className="size-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body: Payment Completion State or Iframe */}
-            <div className="relative flex-1 w-full bg-background overflow-hidden">
-              {paymentCompleted ? (
-                <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in zoom-in-95 duration-300">
-                  <div className="flex size-20 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 mb-4 animate-bounce">
-                    <CheckCircle2 className="size-12" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-foreground">تم الدفع والتفعيل بنجاح!</h3>
-                  <p className="mt-2 text-sm text-muted-foreground max-w-md">
-                    تم تفعيل ترخيص تطبيق عطوري بنجاح. يمكنك الآن فتح التطبيق وتسجيل الدخول بنفس رقم هاتفك:
-                  </p>
-                  <div className="my-5 rounded-xl border border-primary/40 bg-primary/10 px-6 py-3 font-mono font-bold text-lg text-primary">
-                    {phone}
-                  </div>
-                  {activatedLicense && (
-                    <div className="mb-6 w-full max-w-md text-xs font-mono bg-muted/60 p-3 rounded-lg border border-border/60 break-all text-muted-foreground">
-                      مفتاح الترخيص: {activatedLicense}
-                    </div>
-                  )}
-                  <Button
-                    onClick={() => {
-                      setIframeModalOpen(false)
-                      window.location.reload()
-                    }}
-                    size="lg"
-                    className="min-w-44"
-                  >
-                    إتمام والمتابعة
-                  </Button>
-                </div>
-              ) : checkoutUrl ? (
-                <>
-                  <iframe
-                    src={checkoutUrl}
-                    title="Chargily Checkout Payment"
-                    className="w-full h-full border-0"
-                    allow="payment"
-                  />
-                  {/* Status Polling Footer bar inside modal */}
-                  <div className="absolute bottom-0 inset-x-0 bg-background/90 backdrop-blur-sm border-t border-border/50 py-2 px-4 flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="flex items-center gap-2">
-                      <RefreshCw className="size-3 animate-spin text-primary" />
-                      جارٍ رصد عملية الدفع تلقائياً...
-                    </span>
-                    <span>لا تغلق الصفحة حتى اكتمال الدفع</span>
-                  </div>
-                </>
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <Loader2 className="size-8 animate-spin text-primary" />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

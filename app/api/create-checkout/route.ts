@@ -66,7 +66,7 @@ export const POST = withErrors(async (request) => {
     "https://otouri-app.vercel.app"
   const formattedAppUrl = appUrl.startsWith("http") ? appUrl : `https://${appUrl}`
 
-  const success_url = customSuccessUrl || `${formattedAppUrl}/success`
+  const success_url = customSuccessUrl || `${formattedAppUrl}/payment/success`
   const failure_url = customFailureUrl || `${formattedAppUrl}/?payment=failed`
 
   const payload = {
