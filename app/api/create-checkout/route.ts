@@ -11,10 +11,28 @@ import {
 } from "@/lib/server"
 
 export const POST = withErrors(async (request) => {
-  const secretKey = (process.env.CHARGILY_SECRET_KEY || "").trim()
+  // 1 & 3: Check secret key with fallbacks and clean spaces/quotes
+  const rawSecretKey =
+    process.env.CHARGILY_SECRET_KEY ||
+    process.env.CHARGILY_API_KEY ||
+    process.env.CHARGILY_API_SECRET ||
+    ""
+
+  const secretKey = rawSecretKey.trim().replace(/^["']|["']$/g, "")
+
   if (!secretKey) {
     return json({ error: "CHARGILY_SECRET_KEY is not configured on server" }, 500)
   }
+
+  // 2: Determine live vs test mode and base URL
+  const isLive = secretKey.startsWith("live_") || (process.env.CHARGILY_MODE === "live" && !secretKey.startsWith("test_"))
+  const modeName = isLive ? "LIVE" : "TEST"
+  const chargilyBase = isLive
+    ? "https://pay.chargily.net/api/v2"
+    : "https://pay.chargily.net/test/api/v2"
+
+  // 4: Log Mode: LIVE or TEST and first 12 chars of key
+  console.log(`[create-checkout] Mode: ${modeName}, Key prefix: ${secretKey.slice(0, 12)}...`)
 
   const {
     phone: rawPhone,
@@ -40,8 +58,9 @@ export const POST = withErrors(async (request) => {
   const planConfig = PLANS[planType]
   const amount = Number(rawAmount) || planConfig.amount
 
-  // Origin for callback redirection
+  // 6: Don't hardcode success_url, use NEXT_PUBLIC_APP_URL or fallback
   const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
     process.env.NEXT_PUBLIC_URL ||
     process.env.VERCEL_PROJECT_PRODUCTION_URL ||
     "https://otouri-app.vercel.app"
@@ -67,9 +86,9 @@ export const POST = withErrors(async (request) => {
     },
   }
 
-  const chargilyBase = getChargilyApiUrl()
   const chargilyEndpoint = `${chargilyBase}/checkouts`
 
+  // 5: Use header Authorization: Bearer ${secret}
   const response = await fetch(chargilyEndpoint, {
     method: "POST",
     headers: {

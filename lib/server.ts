@@ -7,15 +7,24 @@ import { generateOtr1License } from "@/lib/license"
 export const CHARGILY_TEST_API = "https://pay.chargily.net/test/api/v2"
 export const CHARGILY_LIVE_API = "https://pay.chargily.net/api/v2"
 
-export function getChargilyApiUrl(): string {
+export function getChargilySecretKey(): string {
+  const rawKey =
+    process.env.CHARGILY_SECRET_KEY ||
+    process.env.CHARGILY_API_KEY ||
+    process.env.CHARGILY_API_SECRET ||
+    ""
+  return rawKey.trim().replace(/^["']|["']$/g, "")
+}
+
+export function getChargilyApiUrl(customKey?: string): string {
   if (process.env.CHARGILY_API_URL) {
     return process.env.CHARGILY_API_URL.replace(/\/+$/, "")
   }
-  const secretKey = (process.env.CHARGILY_SECRET_KEY || "").trim()
-  if (secretKey.startsWith("test_") || process.env.CHARGILY_MODE === "test" || !process.env.CHARGILY_MODE) {
-    return CHARGILY_TEST_API
+  const secretKey = (customKey || getChargilySecretKey()).trim().replace(/^["']|["']$/g, "")
+  if (secretKey.startsWith("live_") || (process.env.CHARGILY_MODE === "live" && !secretKey.startsWith("test_"))) {
+    return CHARGILY_LIVE_API
   }
-  return CHARGILY_LIVE_API
+  return CHARGILY_TEST_API
 }
 
 const CORS_HEADERS = {

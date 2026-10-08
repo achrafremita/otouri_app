@@ -3,6 +3,7 @@ import { PLANS, normalizePlanType } from "@/lib/plans"
 import {
   computeExpiry,
   findCustomerLicense,
+  getChargilySecretKey,
   getSupabase,
   json,
   normalizeEmail,
@@ -24,7 +25,7 @@ function isValidSignature(rawBody: string, signature: string, secret: string): b
 
 export async function POST(request: Request) {
   try {
-    const chargilySecret = process.env.CHARGILY_SECRET_KEY
+    const chargilySecret = getChargilySecretKey()
     if (!chargilySecret) {
       console.error("[webhook] CHARGILY_SECRET_KEY not set")
       return json({ error: "Server misconfigured: CHARGILY_SECRET_KEY missing" }, 500)
